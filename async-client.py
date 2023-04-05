@@ -3,6 +3,7 @@ from datetime import datetime
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Prompt
+from rich.table import Table
 from rich.text import Text
 from rich.theme import Theme
 from contextlib import asynccontextmanager
@@ -36,6 +37,13 @@ def display_welcome_message():
     console.print(welcome_message)
     console.print(instructions)
 
+def create_message_table():
+    table = Table(show_header=False, show_lines=True, show_edge=False)
+    table.add_column("Timestamp", style="dim", width=19, no_wrap=True)
+    table.add_column("User", style="bold", width=10)
+    table.add_column("Message")
+    return table
+
 async def main():
     display_title()
     display_welcome_message()
@@ -46,17 +54,23 @@ async def main():
     async with connect_to_server(host, port) as (reader, writer):
         console.print(f"[*] Connected to {host}:{port}", style="success")
 
+        message_table = create_message_table()
+
         while True:
             message = Prompt.ask("Enter your message")
             if message.lower() == "exit":
                 break
 
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            console.print(f"[{timestamp}] You: {message}", style="bold blue")
+            message_table.add_row(timestamp, "You:", message)
 
             await send_message(writer, message)
             response = await receive_message(reader)
-            console.print(f"[{timestamp}] Server: {response}", style="bold")
+            message_table.add_row(timestamp, "Server:", response)
+
+            console.clear()
+            display_title()
+            console.print(message_table)
 
         console.print("[*] Closing the connection", style="success")
 
