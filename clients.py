@@ -4,53 +4,52 @@ import os
 
 
 class ChatGPTClient:
+    """
+    Client for the chat GPT model.
+    """
     def __init__(self):
         self.model="gpt-3.5-turbo"
         self.messages = [
-                {"role": "system", "content": "You are a helpfull assistant."}
+                {"role": "system", "content": "You are a helpfull assistant. You do your best to assist the user in any task as an expert. You ask for clarifying questions when necessary."}
         ]
 
     def complete(self, question):
-
         self.messages.append({"role": "user", "content": question})
-
         resp = openai.ChatCompletion.create(
             model= self.model,
             messages = self.messages
         )
-
         message = resp["choices"][0]["message"]
-
         self.messages.append(message)
-
-
         return message["content"]
 
 
 class ClaudeClient:
+
+    """
+    Client for the anthropic Claude model.
+    
+    """
     def __init__(self):
         self.client = anthropic.Client(os.environ["ANTHROPIC_API_KEY"])
-        self.question = f"{anthropic.HUMAN_PROMPT}"
+        self.prompt = f"{anthropic.HUMAN_PROMPT}"
  
     def complete(self, question, max_tokens_to_sample=100):
 
-        self.question = f"{self.question} {question} {anthropic.AI_PROMPT}"
+        self.prompt = f"{self.prompt} {question} {anthropic.AI_PROMPT}"
 
         resp = self.client.completion(
-            prompt=self.question,
+            prompt=self.prompt,
             stop_sequences=[anthropic.HUMAN_PROMPT, anthropic.AI_PROMPT],
             model="claude-v1",
             max_tokens_to_sample=max_tokens_to_sample,
         )
 
+        # get answer out of the response
         answer = resp["completion"]
-
-        print(answer)
-
-        self.question = f"{self.question} {answer}"
-
-        print(self.question)
-
+        
+        # update prompt
+        self.prompt = f"{self.prompt} {answer}"
 
         return answer
 
