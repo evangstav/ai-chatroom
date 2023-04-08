@@ -3,12 +3,16 @@ import clients
 from contextlib import asynccontextmanager
 
 
-# client = clients.ClaudeClient()
-chatgpt = clients.ChatGPTClient()
+bots = {
+    "chatgpt": clients.ChatGPTClient(),
+    "claude": clients.ClaudeClient()
+}
 
 async def generate_auto_response(message, client = None):
+    print(f"message: {message}")
+    print(f"client: {client}")
     if client:
-        return str(client.complete(message)) + "\n\n"
+        return str(client.complete(message))
     else:
         message = message.lower()
         if "hello" in message:
@@ -30,13 +34,13 @@ async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWrit
             if not message:
                 break
             print(f"{client_address}: {message}")
-            if "@chagpt" in message: # Calls bot (chatgpt) if message contains @bot
-                message = message.replace("@bot", "")
-                auto_response = await generate_auto_response(message, chatgpt)
-                await send_message(writer, auto_response)
-            else:
-                auto_response = await generate_auto_response(message)
-                await send_message(writer, auto_response)
+            bot = next((bot for bot in bots if bot in message), None)
+            print(f"bot used: {bot}")
+            if bot:
+                message = message.replace(bot, "")
+            auto_response = await generate_auto_response(message, bots.get(bot))
+            print(f"auto response: {auto_response}")
+            await send_message(writer, auto_response)
     except Exception as e:
         print(f"Error: {e}")
     finally:
