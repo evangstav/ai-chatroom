@@ -13,7 +13,7 @@ class ChatGPTClient:
         self.messages = [
             {
                 "role": "system",
-                "content": "You are a helpfull assistant. You do your best to assist the user in any task as an expert. You ask for clarifying questions when necessary.",
+                "content": "You are a helpfull assistant. You do your best to assist the user in any task as an expert. You ask for clarifying questions when necessary. You try to be as consise as possible.",
             }
         ]
 
