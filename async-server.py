@@ -3,7 +3,7 @@ import clients
 from contextlib import asynccontextmanager
 
 
-bot_dict = {"claude": clients.ClaudeClient(), "chatgpt": clients.ChatGPTClient()}
+bot_dict = {"@claude": clients.ClaudeClient(), "@chatgpt": clients.ChatGPTClient()}
 
 
 async def generate_auto_response(message, client=None):
@@ -32,11 +32,11 @@ async def handle_client(
             if not message:
                 break
             print(f"{client_address}: {message}")
-            bot = next((bot for bot in bots if bot in message), None)
+            bot = next((bot for bot in bot_dict if bot in message), None)
             print(f"bot used: {bot}")
             if bot:
                 message = message.replace(bot, "")
-            auto_response = await generate_auto_response(message, bots.get(bot))
+            auto_response = await generate_auto_response(message, bot_dict.get(bot))
             print(f"auto response: {auto_response}")
             await send_message(writer, auto_response)
     except Exception as e:
@@ -47,12 +47,16 @@ async def handle_client(
 
 
 async def read_message(reader: asyncio.StreamReader) -> str:
-    message = await reader.read(1024)
+    header = await reader.readexactly(4)
+    length = int.from_bytes(header, byteorder="big")
+    message = await reader.readexactly(length)
     return message.decode("utf-8")
 
 
 async def send_message(writer: asyncio.StreamWriter, message: str) -> None:
-    writer.write(message.encode("utf-8"))
+    data = message.encode("utf-8")
+    header = len(data).to_bytes(4, byteorder="big")
+    writer.write(header + data)
     await writer.drain()
 
 
