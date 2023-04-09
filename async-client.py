@@ -1,9 +1,11 @@
 import asyncio
+import signal
 from datetime import datetime
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 from rich.theme import Theme
+from rich.markdown import Markdown
 from contextlib import asynccontextmanager
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import InMemoryHistory
@@ -11,12 +13,17 @@ from prompt_toolkit.shortcuts import CompleteStyle
 from prompt_toolkit.lexers import PygmentsLexer
 from pygments.lexers.python import PythonLexer
 
-console = Console(theme=Theme({"success": "bold green", "error": "bold red"}))
-
+console = Console(theme=Theme({"success": "bold green", "error": "bold red", "username": "bold cyan", "message": "bold white"}))
 
 @asynccontextmanager
 async def connect_to_server(host, port):
     reader, writer = await asyncio.open_connection(host, port)
+    try:
+        reader, writer = await asyncio.open_connection(host, port)
+        yield reader, writer
+    except ConnectionError:
+        console.print("[!] Connection error", style="error")
+        return
     try:
         yield reader, writer
     finally:
@@ -24,18 +31,20 @@ async def connect_to_server(host, port):
         await writer.wait_closed()
 
 
-async def send_message(writer, message):
-    writer.write(message.encode("utf-8"))
+async def receive_message(reader: asyncio.StreamReader) -> str:
+    header = await reader.readexactly(4)
+    length = int.from_bytes(header, byteorder="big")
+    message = await reader.readexactly(length)
+    return message.decode("utf-8")
+
+async def send_message(writer: asyncio.StreamWriter, message: str) -> None:
+    data = message.encode("utf-8")
+    header = len(data).to_bytes(4, byteorder="big")
+    writer.write(header + data)
     await writer.drain()
 
-
-async def receive_message(reader):
-    response = await reader.read(1024)
-    return response.decode("utf-8")
-
-
 def display_title():
-    title = Text("Python Chat Client", style="bold white on blue", justify="center")
+    title = Text("AI Chatroom", style="bold white on blue", justify="center")
     console.print(Panel(title))
 
 
@@ -45,8 +54,22 @@ def display_welcome_message():
     console.print(welcome_message)
     console.print(instructions)
 
+def display_formatted_markdown(markdown_text: str):
+    # markdown = Markdown(markdown_text, code_theme="onedark")
+    markdown = Markdown(markdown_text)
+    console.print(markdown)
 
-async def main():
+async def shutdown(signal_, loop):
+    console.print("\nShutting down gracefully...", style="success")
+    tasks = [task for task in asyncio.all_tasks() if task is not asyncio.current_task()]
+
+    for task in tasks:
+        task.cancel()
+
+    await asyncio.gather(*tasks, return_exceptions=True)
+    loop.stop()
+
+async def chat():
     display_title()
     display_welcome_message()
 
@@ -54,7 +77,10 @@ async def main():
     port = 9999
 
     async with connect_to_server(host, port) as (reader, writer):
+
         console.print(f"[*] Connected to {host}:{port}", style="success")
+
+        username = input("Enter your username: ")
 
         history = InMemoryHistory()
         session = PromptSession(
@@ -64,23 +90,39 @@ async def main():
         )
 
         while True:
-            message = await session.prompt_async("Enter your message: ")
+            message = await session.prompt_async(f"{username}> ")
             if message.lower() == "exit":
                 break
 
+            await send_message(writer, message)
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             console.print(
-                f"[{timestamp}] You: {message}", style="bold blue", justify="right"
+                f"[{timestamp}] {username}: {message}", style="bold blue", justify="right"
             )
 
-            await send_message(writer, message)
             response = await receive_message(reader)
             console.print(
-                f"[{timestamp}] Server: {response}", style="bold", justify="left"
+                f"[{timestamp}] Server:", style="bold", justify="left"
             )
+            display_formatted_markdown(response)
+            # except (KeyboardInterrupt, EOFError):
+            #     console.print("[*] Closing the connection", style="success")
+            #     break
+            # except Exception as e:
+            #     console.print(f"[!] {e}", style="error")
+            # finally:
+            #     console.print("[*] Closing the connection", style="success")
 
-        console.print("[*] Closing the connection", style="success")
-
+async def chat_wrapper():
+    try:
+        await chat()
+    except asyncio.CancelledError:
+        console.print("\nExiting...", style="error")
+    except Exception as e:
+        console.print(f"Error: {e}", style="error")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(chat_wrapper())
+    except KeyboardInterrupt:
+        console.print("\nExiting...", style="error")
