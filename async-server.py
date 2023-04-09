@@ -3,6 +3,8 @@ import clients
 from contextlib import asynccontextmanager
 import logging
 
+from message_utils import receive_message, send_message
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -32,7 +34,7 @@ async def handle_client(
 
     try:
         while True:
-            message = await read_message(reader)
+            message = await receive_message(reader)
             if not message:
                 break
             logger.info(f"{client_address}: {message}")
@@ -50,20 +52,6 @@ async def handle_client(
     finally:
         await close_writer(writer)
         logger.info(f"[*] Connection closed with {client_address}")
-
-
-async def read_message(reader: asyncio.StreamReader) -> str:
-    header = await reader.readexactly(4)
-    length = int.from_bytes(header, byteorder="big")
-    message = await reader.readexactly(length)
-    return message.decode("utf-8")
-
-
-async def send_message(writer: asyncio.StreamWriter, message: str) -> None:
-    data = message.encode("utf-8")
-    header = len(data).to_bytes(4, byteorder="big")
-    writer.write(header + data)
-    await writer.drain()
 
 
 async def close_writer(writer: asyncio.StreamWriter) -> None:

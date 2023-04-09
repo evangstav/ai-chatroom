@@ -1,5 +1,4 @@
 import asyncio
-import signal
 from datetime import datetime
 from rich.console import Console
 from rich.panel import Panel
@@ -12,6 +11,9 @@ from prompt_toolkit.history import InMemoryHistory
 from prompt_toolkit.shortcuts import CompleteStyle
 from prompt_toolkit.lexers import PygmentsLexer
 from pygments.lexers.python import PythonLexer
+
+from message_utils import receive_message, send_message
+
 
 console = Console(theme=Theme({"success": "bold green", "error": "bold red", "username": "bold cyan", "message": "bold white"}))
 
@@ -30,23 +32,9 @@ async def connect_to_server(host, port):
         writer.close()
         await writer.wait_closed()
 
-
-async def receive_message(reader: asyncio.StreamReader) -> str:
-    header = await reader.readexactly(4)
-    length = int.from_bytes(header, byteorder="big")
-    message = await reader.readexactly(length)
-    return message.decode("utf-8")
-
-async def send_message(writer: asyncio.StreamWriter, message: str) -> None:
-    data = message.encode("utf-8")
-    header = len(data).to_bytes(4, byteorder="big")
-    writer.write(header + data)
-    await writer.drain()
-
 def display_title():
     title = Text("AI Chatroom", style="bold white on blue", justify="center")
     console.print(Panel(title))
-
 
 def display_welcome_message():
     welcome_message = Text("Welcome to the Python Chat Client!", style="bold")
@@ -105,13 +93,6 @@ async def chat():
                 f"[{timestamp}] Server:", style="bold", justify="left"
             )
             display_formatted_markdown(response)
-            # except (KeyboardInterrupt, EOFError):
-            #     console.print("[*] Closing the connection", style="success")
-            #     break
-            # except Exception as e:
-            #     console.print(f"[!] {e}", style="error")
-            # finally:
-            #     console.print("[*] Closing the connection", style="success")
 
 async def chat_wrapper():
     try:
